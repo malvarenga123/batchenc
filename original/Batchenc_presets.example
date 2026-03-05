@@ -1,0 +1,49 @@
+faac -h
+faac -q 100 -c 16000 <infile> <outfile.aac>
+faad -h
+faad <infile> -o <outfile.wav>
+flac -dc <infile> | lame --alt-preset standard - <outfile.mp3>
+flac --decode <infile> -o <outfile.wav>
+flac --explain | more
+flac <infile> -o <outfile.flac>
+lame -?
+lame --alt-preset standard <infile> <outfile.mp3>
+lame --alt-preset standard <infile> <outfile.mp3> && tag --auto <outfile.mp3>
+lame --decode <infile> <outfile.wav>
+mac <infile> <outfile.ape> -c2000
+mac <infile> <outfile.wav> -d
+mac -h
+madplay -h | more
+madplay -v -d -a -1 <infile> -o wave:<outfile.wav>
+mp3gain /?
+mp3gain /a <allfiles>
+mp3gain /r <infile>
+mp4creator60 -aac-profile=2 -extract=1 <infile> <outfile.aac>
+mp4creator60 -aac-profile=4 -optimize -create=<infile> <outfile.mp4>
+mp4creator60 -help
+mppdec <infile> <outfile.wav>
+mppdec --help
+mppenc --longhelp | more
+mppenc --xlevel <infile> <outfile.mpc>
+ofr --decode <infile> --output <outfile.wav>
+ofr --encode <infile> --output <outfile.ofr>
+ofr --help | more
+oggdec <infile>
+oggdec -h
+oggenc2 -h | more
+oggenc2 -q 4 <infile> -o <outfile.ogg>
+replaygain
+replaygain --auto <allfiles>
+tag --auto <infile>
+tag --help | more
+ttaenc -d <infile> -o <outfile.wav>
+ttaenc -d <infile> -o <outfile.wav> && mppenc <outfile.wav> <outfile.mpc> && del <outfile.wav>
+ttaenc -e <infile> -o <outfile.tta>
+ttaenc -h
+wavegain --apply --album <allfiles>
+wavegain --apply --radio <infile>
+wavegain -h
+wavpack <infile> <outfile.wv>
+wavpack
+wvunpack <infile> <outfile.wav>
+wvunpack
