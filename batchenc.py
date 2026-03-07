@@ -272,14 +272,17 @@ class BatchencApp:
         if os.path.exists(cfg_path): return
         
         defaults = [
-            "# === Video ===",
-            'ffmpeg -i "<infile>" -c:v libx264 -crf 23 "<outfile.mp4>"',
-            "",
             "# === Audio ===",
-            'ffmpeg -i "<infile>" -vn -c:a libopus -b:a 128k "<outfile.opus>"',
+            'ffmpeg -i <infile> -c:a aac -b:a 160k <outfile.m4a>',
+            'ffmpeg -i <infile> -c:a aac -q:a 2 <outfile.m4a>',
+            'lossyWAV.exe <infile> -q U -a 6 -s W x -A --scale 0.25 --stdout --silent --low | flac.exe -8 -e -p -b 512 -P=24576 -s -o <outfile.lossy.flac> -',
             "",
-            "# === Images ===",
-            'magick "<infile>" -resize 1920x1080 "<outfile.jpg>"'
+            "# === Video ===",
+            'ffmpeg -i <infile> -c:v libx264 -crf 23 <outfile.mp4>',
+            "",
+            "# === Test ===",
+            'echo converting <infile> to <outfile.mp3>',
+            'echo ReplayGain on <allfiles>'
         ]
         try:
             with open(cfg_path, "w", encoding="utf-8") as f:
@@ -633,3 +636,4 @@ if __name__ == "__main__":
     
     app = BatchencApp(root)
     root.mainloop()
+
