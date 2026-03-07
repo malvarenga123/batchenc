@@ -11,7 +11,7 @@ import platform
 from collections import defaultdict
 
 # --- CONSTANTS ---
-APP_VERSION = "1.6.0"
+APP_VERSION = "1.6.1"
 ORIGINAL_VERSION = "1.5.1"
 PLACEHOLDER_DIR = "<< same as input directory >>"
 CONFIG_FILENAME = "Batchenc_presets.cfg"
@@ -54,6 +54,7 @@ def get_short_path(path):
             return path
         return buf.value
     except Exception:
+        return path
     """
     return path
 
@@ -129,7 +130,10 @@ class BatchencApp:
         self.btn_clear.pack(pady=(0, 10))
         
         self.overwrite_var = tk.BooleanVar(value=False)
-        tk.Checkbutton(btn_frame, text="Overwrite", variable=self.overwrite_var).pack(pady=(0, 5))
+        tk.Checkbutton(btn_frame, text="Overwrite", variable=self.overwrite_var).pack(pady=(0, 2))
+        
+        self.low_priority_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(btn_frame, text="Low Priority", variable=self.low_priority_var).pack(pady=(0, 5))
 
         tk.Button(btn_frame, text="About", width=10, command=self.open_about_window).pack(pady=(0, 10))
         
@@ -268,17 +272,14 @@ class BatchencApp:
         if os.path.exists(cfg_path): return
         
         defaults = [
-            "# === Audio ===",
-            'ffmpeg -i <infile> -c:a aac -b:a 160k <outfile.m4a>',
-            'ffmpeg -i <infile> -c:a aac -q:a 2 <outfile.m4a>',
-            'lossyWAV.exe <infile> -q U -a 6 -s W x -A --scale 0.25 --stdout --silent --low | flac.exe -8 -e -p -b 512 -P=24576 -s -o <outfile.lossy.flac> -',
-            "",
             "# === Video ===",
-            'ffmpeg -i <infile> -c:v libx264 -crf 23 <outfile.mp4>',
+            'ffmpeg -i "<infile>" -c:v libx264 -crf 23 "<outfile.mp4>"',
             "",
-            "# === Test ===",
-            'echo converting <infile> to <outfile.mp3>',
-            'echo ReplayGain on <allfiles>'
+            "# === Audio ===",
+            'ffmpeg -i "<infile>" -vn -c:a libopus -b:a 128k "<outfile.opus>"',
+            "",
+            "# === Images ===",
+            'magick "<infile>" -resize 1920x1080 "<outfile.jpg>"'
         ]
         try:
             with open(cfg_path, "w", encoding="utf-8") as f:
@@ -335,11 +336,9 @@ class BatchencApp:
             if not os.path.exists(cfg_path): return
             
             try:
-                # Read all lines
                 with open(cfg_path, "r", encoding="utf-8") as f:
                     lines = f.readlines()
                 
-                # Write back lines that DON'T match the text exactly
                 with open(cfg_path, "w", encoding="utf-8") as f:
                     for line in lines:
                         if line.strip() == text and not line.strip().startswith("#"):
@@ -355,7 +354,8 @@ class BatchencApp:
             "output_directory": self.output_entry.get(),
             "file_list": self.files_storage,
             "geometry": self.root.geometry(),
-            "overwrite": self.overwrite_var.get()
+            "overwrite": self.overwrite_var.get(),
+            "low_priority": self.low_priority_var.get()
         }
         try:
             with open(os.path.join(get_script_directory(), SESSION_FILENAME), "w", encoding="utf-8") as f:
@@ -384,6 +384,9 @@ class BatchencApp:
                 
             if "overwrite" in data:
                 self.overwrite_var.set(data["overwrite"])
+                
+            if "low_priority" in data:
+                self.low_priority_var.set(data["low_priority"])
 
             if "file_list" in data:
                 self.add_paths_to_list(data["file_list"])
@@ -435,7 +438,7 @@ class BatchencApp:
         else:
             messagebox.showinfo("Log", "No log file found.")
 
-    def run_command_helper(self, cmd, log_file):
+    def run_command_helper(self, cmd, log_file, low_priority=False):
         """Helper to run a subprocess safely and log output."""
         try:
             kwargs = {'stdout': log_file, 'stderr': subprocess.STDOUT, 'shell': True}
@@ -443,13 +446,21 @@ class BatchencApp:
                 si = subprocess.STARTUPINFO()
                 si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
                 kwargs['startupinfo'] = si
+                
+                # Apply Windows Low Priority
+                if low_priority:
+                    kwargs['creationflags'] = 0x00000040
+            else:
+                # Apply Unix/Linux/macOS Low Priority using 'nice'
+                if low_priority:
+                    cmd = f"nice -n 19 {cmd}"
             
             return subprocess.run(cmd, **kwargs)
         except Exception as e:
             log_file.write(f"Error executing subprocess: {e}\n")
             return None
 
-    def processing_thread(self, cmd_template, raw_output_dir, overwrite_mode, files_snapshot):
+    def processing_thread(self, cmd_template, raw_output_dir, overwrite_mode, low_priority_mode, files_snapshot):
         log_path = os.path.join(get_script_directory(), LOG_FILENAME)
         had_errors = False
         
@@ -464,6 +475,8 @@ class BatchencApp:
                     log.flush()
                 
                 log_print(f"--- Session Start: {APP_VERSION} ---")
+                if low_priority_mode:
+                    log_print("--- Running in Low Priority Mode ---")
 
                 # --- ALBUM MODE ---
                 if "<allfiles>" in cmd_template:
@@ -485,7 +498,7 @@ class BatchencApp:
                         cmd = cmd_template.replace("<allfiles>", all_files_str)
                         
                         log_print(f"Dir: {folder}\nCmd: {cmd}")
-                        res = self.run_command_helper(cmd, log)
+                        res = self.run_command_helper(cmd, log, low_priority=low_priority_mode)
                         if res and res.returncode != 0: had_errors = True
 
                 # --- STANDARD MODE ---
@@ -523,7 +536,7 @@ class BatchencApp:
                             cmd = cmd.replace(tag, f'"{final_out}"')
                             
                         log_print(f"File: {os.path.basename(infile)}\nCmd: {cmd}")
-                        res = self.run_command_helper(cmd, log)
+                        res = self.run_command_helper(cmd, log, low_priority=low_priority_mode)
                         if res and res.returncode != 0: had_errors = True
 
                 log_print("--- Finished ---")
@@ -565,13 +578,14 @@ class BatchencApp:
         # CAPTURE STATE IN MAIN THREAD
         raw_output_dir = self.output_entry.get().strip()
         overwrite_mode = self.overwrite_var.get()
+        low_priority_mode = self.low_priority_var.get()
         files_snapshot = list(self.files_storage)
 
         self.stop_event.clear()
         
         # PASS EVERYTHING AS ARGUMENTS (Zero Widget Access in Worker)
         t = threading.Thread(target=self.processing_thread, 
-                             args=(cmd, raw_output_dir, overwrite_mode, files_snapshot), 
+                             args=(cmd, raw_output_dir, overwrite_mode, low_priority_mode, files_snapshot), 
                              daemon=True)
         t.start()
 
